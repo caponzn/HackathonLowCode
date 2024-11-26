@@ -1,13 +1,20 @@
 {
     "fields": [
         {
-            "name": "idade",
-            "label": "idade",
-            "type": "int",
+            "max": null,
+            "maxLength": "100",
+            "min": null,
+            "name": "Nome",
             "required": true,
-            "maxLength": "2",
+            "type": "VARCHAR"
+        },
+        {
+            "name": "Idade",
+            "type": "INT",
+            "required": true,
+            "maxLength": "10",
             "min": "0",
-            "max": "15"
+            "max": "150"
         }
     ]
 }
