@@ -1,0 +1,13 @@
+{
+    "fields": [
+        {
+            "name": "idade",
+            "label": "idade",
+            "type": "int",
+            "required": true,
+            "maxLength": "2",
+            "min": "0",
+            "max": "15"
+        }
+    ]
+}

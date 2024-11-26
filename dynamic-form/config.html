@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuração de Formulário</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+        }
+        .field-config {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        label {
+            display: block;
+            margin-top: 5px;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .btn-danger {
+            background-color: #FF4136;
+        }
+        .btn-danger:hover {
+            background-color: #C13028;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Configuração de Formulário</h1>
+
+        <!-- Área para adicionar/editar campo -->
+        <div class="field-config">
+            <h3 id="form-title">Adicionar Campo</h3>
+            <label for="field-name">Nome do Campo</label>
+            <input type="text" id="field-name" placeholder="Ex.: nome, email, idade" required>
+
+            <label for="field-label">Rótulo</label>
+            <input type="text" id="field-label" placeholder="Ex.: Nome Completo, Email, Idade">
+
+            <label for="field-type">Tipo</label>
+            <select id="field-type">
+                <option value="text">Texto</option>
+                <option value="email">Email</option>
+                <option value="int">int</option>
+                <option value="double">double</option>
+            </select>
+
+            <label for="field-required">Obrigatório?</label>
+            <select id="field-required">
+                <option value="true">Sim</option>
+                <option value="false">Não</option>
+            </select>
+
+            <label for="field-max-length">Tamanho Máximo (Opcional)</label>
+            <input type="int" type="double" id="field-max-length" placeholder="Ex.: 100">
+
+            <label for="field-min">Valor Mínimo (Opcional)</label>
+            <input type="int" type="double" id="field-min" placeholder="Ex.: 0">
+
+            <label for="field-max">Valor Máximo (Opcional)</label>
+            <input type="int" type="double" id="field-max" placeholder="Ex.: 99">
+
+            <button id="save-field-btn">Salvar Campo</button>
+        </div>
+
+        <!-- Lista de campos configurados -->
+        <h2>Campos Configurados</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Rótulo</th>
+                    <th>Tipo</th>
+                    <th>Obrigatório</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="fields-table">
+                <!-- Campos configurados aparecem aqui -->
+            </tbody>
+        </table>
+
+        <button id="save-config-btn">Salvar Configuração</button>
+    </div>
+
+    <script>
+        const apiUrl = "http://127.0.0.1:5000/api";
+        let fields = [];
+        let editingIndex = null; // Para rastrear qual campo está sendo editado
+
+        // Atualizar a tabela de campos configurados
+        function updateFieldsTable() {
+            const tableBody = document.getElementById("fields-table");
+            tableBody.innerHTML = "";
+
+            fields.forEach((field, index) => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${field.name}</td>
+                    <td>${field.label}</td>
+                    <td>${field.type}</td>
+                    <td>${field.required ? "Sim" : "Não"}</td>
+                    <td>
+                        <button onclick="editField(${index})">Configurar</button>
+                        <button class="btn-danger" onclick="deleteField(${index})">Excluir</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Adicionar ou atualizar campo
+        document.getElementById("save-field-btn").addEventListener("click", () => {
+            const name = document.getElementById("field-name").value.trim();
+            const label = document.getElementById("field-label").value.trim();
+            const type = document.getElementById("field-type").value;
+            const required = document.getElementById("field-required").value === "true";
+            const maxLength = document.getElementById("field-max-length").value || null;
+            const min = document.getElementById("field-min").value || null;
+            const max = document.getElementById("field-max").value || null;
+
+            if (!name || !label) {
+                alert("Nome e Rótulo são obrigatórios!");
+                return;
+            }
+
+            const field = { name, label, type, required, maxLength, min, max };
+
+            if (editingIndex !== null) {
+                fields[editingIndex] = field; // Atualizar o campo existente
+                editingIndex = null; // Resetar o índice de edição
+                document.getElementById("form-title").textContent = "Adicionar Campo";
+            } else {
+                fields.push(field); // Adicionar novo campo
+            }
+
+            resetForm();
+            updateFieldsTable();
+        });
+
+        // Preencher o formulário com dados de um campo para edição
+        function editField(index) {
+            const field = fields[index];
+            editingIndex = index; // Salvar índice para edição
+
+            document.getElementById("form-title").textContent = "Editar Campo";
+            document.getElementById("field-name").value = field.name;
+            document.getElementById("field-label").value = field.label;
+            document.getElementById("field-type").value = field.type;
+            document.getElementById("field-required").value = field.required.toString();
+            document.getElementById("field-max-length").value = field.maxLength || "";
+            document.getElementById("field-min").value = field.min || "";
+            document.getElementById("field-max").value = field.max || "";
+        }
+
+        // Remover campo da configuração
+        function deleteField(index) {
+            fields.splice(index, 1);
+            updateFieldsTable();
+        }
+
+        // Resetar formulário
+        function resetForm() {
+            document.getElementById("field-name").value = "";
+            document.getElementById("field-label").value = "";
+            document.getElementById("field-type").value = "text";
+            document.getElementById("field-required").value = "true";
+            document.getElementById("field-max-length").value = "";
+            document.getElementById("field-min").value = "";
+            document.getElementById("field-max").value = "";
+        }
+
+        // Salvar configuração no backend
+        document.getElementById("save-config-btn").addEventListener("click", async () => {
+            const response = await fetch(`${apiUrl}/config`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ fields })
+            });
+
+            const result = await response.json();
+            alert(result.message);
+        });
+    </script>
+</body>
+</html>

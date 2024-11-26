@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulário Dinâmico</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .field {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Formulário Dinâmico</h1>
+    <div id="form-container"></div>
+    <button id="submit-btn">Enviar</button>
+
+    <script>
+        const apiUrl = "http://127.0.0.1:5000/api";
+
+        // Função para buscar a configuração do formulário
+        async function fetchFormConfig() {
+            const response = await fetch(`${apiUrl}/config`);
+            const config = await response.json();
+            generateForm(config.fields);
+        }
+
+        // Gerar formulário dinâmico
+        function generateForm(fields) {
+            const formContainer = document.getElementById("form-container");
+            formContainer.innerHTML = "";
+
+            fields.forEach(field => {
+                const fieldDiv = document.createElement("div");
+                fieldDiv.classList.add("field");
+
+                const label = document.createElement("label");
+                label.textContent = field.label;
+
+                const input = document.createElement("input");
+                input.type = field.type;
+                input.name = field.name;
+
+                // Adicionar validações
+                if (field.required) input.required = true;
+                if (field.maxLength) input.maxLength = field.maxLength;
+                if (field.min) input.min = field.min;
+                if (field.max) input.max = field.max;
+
+                fieldDiv.appendChild(label);
+                fieldDiv.appendChild(input);
+                formContainer.appendChild(fieldDiv);
+            });
+        }
+
+        // Enviar dados do formulário
+        document.getElementById("submit-btn").addEventListener("click", async () => {
+            const inputs = document.querySelectorAll("#form-container input");
+            const data = {};
+            inputs.forEach(input => {
+                data[input.name] = input.value;
+            });
+
+            const response = await fetch(`${apiUrl}/data`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            alert(result.message);
+        });
+
+        // Carregar configuração do formulário
+        fetchFormConfig();
+    </script>
+</body>
+</html>
