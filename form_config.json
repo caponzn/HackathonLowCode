@@ -2,27 +2,35 @@
     "fields": [
         {
             "max": null,
-            "maxLength": null,
+            "maxLength": "50",
             "min": null,
-            "name": "email",
+            "name": "nome",
             "required": true,
             "type": "VARCHAR"
         },
         {
-            "name": "Nome",
-            "type": "VARCHAR",
-            "required": true,
-            "maxLength": "10",
-            "min": null,
-            "max": null
-        },
-        {
-            "max": null,
+            "max": "100",
             "maxLength": null,
             "min": "18",
             "name": "idade",
             "required": true,
             "type": "INT"
+        },
+        {
+            "max": null,
+            "maxLength": "100",
+            "min": null,
+            "name": "email",
+            "required": false,
+            "type": "VARCHAR"
+        },
+        {
+            "max": null,
+            "maxLength": null,
+            "min": null,
+            "name": "ativo",
+            "required": false,
+            "type": "BOOLEAN"
         }
     ]
 }
