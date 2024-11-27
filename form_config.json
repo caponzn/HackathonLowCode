@@ -1,26 +1,10 @@
 {
     "fields": [
         {
-            "name": "name",
+            "name": "Nome",
             "type": "VARCHAR",
             "required": true,
             "maxLength": "50",
-            "min": null,
-            "max": null
-        },
-        {
-            "name": "email",
-            "type": "VARCHAR",
-            "required": true,
-            "maxLength": "100",
-            "min": null,
-            "max": null
-        },
-        {
-            "name": "age",
-            "type": "INT",
-            "required": false,
-            "maxLength": null,
             "min": null,
             "max": null
         }

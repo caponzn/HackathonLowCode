@@ -45,13 +45,65 @@ def save_json(file, data):
     with open(file, "w") as f:
         json.dump(data, f, indent=4)
 
+# Função para validar o arquivo CSV com base na configuração
+def validate_csv(file_path):
+    # Carregar a configuração das colunas
+    config = load_json(CONFIG_FILE, {"fields": []})
+    fields = config.get("fields", [])
+
+    # Ler o arquivo CSV
+    try:
+        data = pd.read_csv(file_path, encoding="utf-8")
+    except Exception as e:
+        return False, f"Erro ao ler o arquivo CSV: {str(e)}"
+
+    # Verificar se o CSV está vazio
+    if data.empty:
+        return False, "O arquivo CSV está vazio."
+
+    # Verificar número de colunas
+    if len(data.columns) != len(fields):
+        return False, f"O número de colunas no arquivo CSV ({len(data.columns)}) não corresponde ao esperado ({len(fields)})."
+
+    # Verificar nomes das colunas
+    expected_columns = [field["name"] for field in fields]
+    if list(data.columns) != expected_columns:
+        return False, f"As colunas do arquivo CSV não correspondem às esperadas. Esperado: {expected_columns}, recebido: {list(data.columns)}."
+
+    # Validar tipos de dados e obrigatoriedade
+    for field in fields:
+        column_name = field["name"]
+        column_type = field["type"]
+        is_required = field["required"]
+
+        # Verificar valores ausentes em colunas obrigatórias
+        if is_required and data[column_name].isnull().any():
+            return False, f"A coluna '{column_name}' contém valores ausentes, mas é obrigatória."
+
+        # Verificar tipos de dados
+        if column_type == "INT" and not pd.api.types.is_integer_dtype(data[column_name].dropna()):
+            return False, f"A coluna '{column_name}' deve conter apenas números inteiros."
+        if column_type == "FLOAT" and not pd.api.types.is_float_dtype(data[column_name].dropna()):
+            return False, f"A coluna '{column_name}' deve conter apenas números decimais."
+        if column_type == "VARCHAR" and not pd.api.types.is_string_dtype(data[column_name].dropna()):
+            return False, f"A coluna '{column_name}' deve conter apenas texto."
+        if column_type == "BOOLEAN" and not data[column_name].dropna().isin([True, False, "true", "false", 1, 0]).all():
+            return False, f"A coluna '{column_name}' deve conter apenas valores booleanos (True/False)."
+        if column_type == "DATE":
+            try:
+                pd.to_datetime(data[column_name].dropna(), format="%Y-%m-%d", errors="raise")
+            except ValueError:
+                return False, f"A coluna '{column_name}' deve conter datas no formato 'YYYY-MM-DD'."
+
+    # Se todas as validações passarem
+    return True, "Arquivo CSV validado com sucesso."
+
 # Rota para obter e salvar a configuração das colunas
 @app.route("/api/config", methods=["GET", "POST"])
 def handle_config():
     if request.method == "GET":
         config = load_json(CONFIG_FILE, {"fields": []})
         return jsonify(config)
-    
     elif request.method == "POST":
         try:
             config = request.json
@@ -61,19 +113,20 @@ def handle_config():
             print(f"Erro ao salvar configuração: {str(e)}")
             return jsonify({"error": f"Erro ao salvar configuração: {str(e)}"}), 500
 
-# Rota para listar os dados salvos
+# Rota para listar os dados salvos no banco de dados
 @app.route("/api/data", methods=["GET"])
 def list_form_data():
     try:
+        # Conectar ao banco de dados
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM form_responses")
             rows = cursor.fetchall()
 
-            # Substituir NaN por null no JSON retornado
-            data = [{"id": row[0], "data": json.loads(row[1].replace("NaN", "null"))} for row in rows]
+            # Substituir valores NaN por null
+            data = [{"id": row[0], "data": json.loads(row[1])} for row in rows]
 
-        return jsonify(data)
+        return jsonify(data), 200
     except Exception as e:
         print(f"Erro ao listar dados: {str(e)}")
         return jsonify({"error": f"Erro ao listar dados: {str(e)}"}), 500
@@ -155,13 +208,15 @@ def upload_csv():
     file_path = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(file_path)
 
-    try:
-        # Ler o arquivo CSV com pandas
-        data = pd.read_csv(file_path, encoding="utf-8")
+    # Validar o arquivo CSV
+    is_valid, message = validate_csv(file_path)
+    if not is_valid:
+        os.remove(file_path)  # Remover o arquivo inválido
+        return jsonify({"error": message}), 400
 
-        # Verificar se o CSV não está vazio
-        if data.empty:
-            return jsonify({"error": "O arquivo CSV está vazio."}), 400
+    try:
+        # Processar o arquivo CSV (após validação bem-sucedida)
+        data = pd.read_csv(file_path, encoding="utf-8")
 
         # Substituir NaN por None para compatibilidade com JSON
         data = data.replace({np.nan: None})
@@ -174,12 +229,10 @@ def upload_csv():
                 cursor.execute("INSERT INTO form_responses (data) VALUES (?)", [json.dumps(record)])
             conn.commit()
 
+        os.remove(file_path)  # Remover o arquivo após o processamento
         return jsonify({"message": "Arquivo CSV carregado com sucesso!", "data": data_records})
-    except pd.errors.EmptyDataError:
-        return jsonify({"error": "O arquivo CSV está vazio."}), 400
-    except pd.errors.ParserError as e:
-        return jsonify({"error": f"Erro ao processar o arquivo CSV: {str(e)}"}), 400
     except Exception as e:
+        os.remove(file_path)  # Remover o arquivo em caso de erro
         print(f"Erro ao processar o arquivo CSV: {str(e)}")
         return jsonify({"error": f"Erro ao processar o arquivo: {str(e)}"}), 500
 
