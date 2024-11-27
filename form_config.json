@@ -1,15 +1,15 @@
 {
     "fields": [
         {
-            "max": null,
+            "name": "Nome",
+            "type": "VARCHAR",
+            "required": true,
             "maxLength": null,
             "min": null,
-            "name": "Nome",
-            "required": true,
-            "type": "VARCHAR"
+            "max": null
         },
         {
-            "name": "idade",
+            "name": "Filhos",
             "type": "INT",
             "required": true,
             "maxLength": null,

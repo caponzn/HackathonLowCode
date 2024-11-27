@@ -49,66 +49,47 @@ def list_form_data():
 # Rota para salvar dados do formulário com validação
 @app.route("/api/data", methods=["POST"])
 def save_form_data():
-    try:
-        data = request.json
-        if not data:
-            return jsonify({"error": "Nenhum dado enviado"}), 400
+    data = request.json  # Dados recebidos do frontend
+    config = load_json(CONFIG_FILE, {"fields": []})
+    fields = config.get("fields", [])
 
-        config = load_json(CONFIG_FILE, {"fields": []})
-        fields = config.get("fields", [])
+    errors = []
+    # Validar os dados recebidos com base na configuração
+    for field in fields:
+        name = field["name"]
+        value = data.get(name)
+        required = field.get("required", False)
 
-        errors = []
-        # Validar os dados recebidos com base na configuração
-        for field in fields:
-            name = field["name"]
-            value = data.get(name)
-            required = field.get("required", False)
-            max_length = field.get("maxLength")
-            min_value = field.get("min")
-            max_value = field.get("max")
-            field_type = field.get("type")
+        # Garantir que min, max e maxLength sejam tratados como números inteiros, se definidos
+        max_length = int(field.get("maxLength")) if field.get("maxLength") else None
+        min_value = float(field.get("min")) if field.get("min") else None
+        max_value = float(field.get("max")) if field.get("max") else None
 
-            # Verificar se o campo é obrigatório
-            if required and (value is None or value == ""):
-                errors.append(f"O campo '{name}' é obrigatório.")
-                continue
+        # Verificar se o campo é obrigatório
+        if required and (value is None or value == ""):
+            errors.append(f"O campo '{name}' é obrigatório.")
+            continue
 
-            # Converter valores para o tipo correto
-            if value is not None:
-                try:
-                    if field_type == "INT":
-                        value = int(value)  # Converter para inteiro
-                    elif field_type == "FLOAT":
-                        value = float(value)  # Converter para número real
-                except ValueError:
-                    errors.append(f"O campo '{name}' deve ser um número válido.")
-                    continue
+        # Verificar tamanho máximo (para strings)
+        if max_length and isinstance(value, str) and len(value) > max_length:
+            errors.append(f"O campo '{name}' excede o tamanho máximo de {max_length} caracteres.")
+            continue
 
-                # Verificar tamanho máximo (para strings)
-                if field_type == "VARCHAR" and max_length and isinstance(value, str) and len(value) > max_length:
-                    errors.append(f"O campo '{name}' excede o tamanho máximo de {max_length} caracteres.")
-                    continue
+        # Verificar limites numéricos (para números)
+        if isinstance(value, (int, float)):
+            if min_value is not None and value < min_value:
+                errors.append(f"O campo '{name}' deve ser maior ou igual a {min_value}.")
+            if max_value is not None and value > max_value:
+                errors.append(f"O campo '{name}' deve ser menor ou igual a {max_value}.")
 
-                # Verificar limites numéricos
-                if field_type in ["INT", "FLOAT"]:
-                    if min_value is not None and value < min_value:
-                        errors.append(f"O campo '{name}' deve ser maior ou igual a {min_value}.")
-                    if max_value is not None and value > max_value:
-                        errors.append(f"O campo '{name}' deve ser menor ou igual a {max_value}.")
+    if errors:
+        return jsonify({"errors": errors}), 400
 
-        if errors:
-            return jsonify({"errors": errors}), 400
-
-        # Salvar os dados se não houver erros
-        existing_data = load_json(DATA_FILE, [])
-        existing_data.append(data)
-        save_json(DATA_FILE, existing_data)
-
-        return jsonify({"message": "Dados salvos com sucesso!"})
-    except Exception as e:
-        print(f"Erro interno: {e}")  # Log do erro para depuração
-        return jsonify({"error": "Erro interno no servidor"}), 500
-
+    # Salvar os dados se não houver erros
+    existing_data = load_json(DATA_FILE, [])
+    existing_data.append(data)
+    save_json(DATA_FILE, existing_data)
+    return jsonify({"message": "Dados salvos com sucesso!"})
 # Rota para upload de arquivos CSV
 @app.route("/api/upload", methods=["POST"])
 def upload_file():
@@ -143,9 +124,9 @@ def upload_file():
 
                 value = row[name]
                 required = field.get("required", False)
-                max_length = field.get("maxLength")
-                min_value = field.get("min")
-                max_value = field.get("max")
+                max_length = int(field.get("maxLength")) if field.get("maxLength") else None
+                min_value = float(field.get("min")) if field.get("min") else None
+                max_value = float(field.get("max")) if field.get("max") else None
                 field_type = field.get("type")
 
                 # Verificar obrigatoriedade
