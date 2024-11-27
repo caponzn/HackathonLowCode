@@ -4,9 +4,25 @@
             "max": null,
             "maxLength": null,
             "min": null,
-            "name": "Nome",
+            "name": "email",
             "required": true,
             "type": "VARCHAR"
+        },
+        {
+            "name": "Nome",
+            "type": "VARCHAR",
+            "required": true,
+            "maxLength": "10",
+            "min": null,
+            "max": null
+        },
+        {
+            "max": null,
+            "maxLength": null,
+            "min": "18",
+            "name": "idade",
+            "required": true,
+            "type": "INT"
         }
     ]
 }
