@@ -19,5 +19,15 @@
     },
     {
         "idade": "16"
+    },
+    {
+        "idade": 15
+    },
+    {
+        "Nome": "Ricardo"
+    },
+    {
+        "Nome": "Ricardo",
+        "idade": 15
     }
 ]

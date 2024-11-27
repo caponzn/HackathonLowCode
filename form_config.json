@@ -2,19 +2,19 @@
     "fields": [
         {
             "max": null,
-            "maxLength": "100",
+            "maxLength": null,
             "min": null,
             "name": "Nome",
             "required": true,
             "type": "VARCHAR"
         },
         {
-            "name": "Idade",
+            "name": "idade",
             "type": "INT",
             "required": true,
-            "maxLength": "10",
-            "min": "0",
-            "max": "150"
+            "maxLength": null,
+            "min": null,
+            "max": null
         }
     ]
 }

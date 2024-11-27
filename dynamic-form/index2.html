@@ -29,9 +29,18 @@
 
         // Função para buscar configuração das colunas
         async function fetchColumns() {
-            const response = await fetch(`${apiUrl}/config`);
-            const result = await response.json();
-            generateForm(result.fields || []);
+            try {
+                const response = await fetch(`${apiUrl}/config`);
+                if (!response.ok) {
+                    throw new Error("Erro ao buscar a configuração das colunas.");
+                }
+                const result = await response.json();
+                generateForm(result.fields || []);
+            } catch (error) {
+                const feedback = document.getElementById("feedback");
+                feedback.className = "alert alert-danger";
+                feedback.textContent = `Erro ao carregar configurações: ${error.message}`;
+            }
         }
 
         // Gerar os campos do formulário com base nas colunas configuradas
@@ -103,8 +112,14 @@
                     return;
                 }
 
-                // Adicionar o valor ao objeto de dados
-                data[name] = input.type === "number" ? parseFloat(value) : value;
+                // Adicionar o valor ao objeto de dados (convertendo tipos, se necessário)
+                if (input.type === "number") {
+                    data[name] = value ? parseFloat(value) : null;
+                } else if (input.type === "select-one") {
+                    data[name] = value === "true";
+                } else {
+                    data[name] = value;
+                }
             });
 
             return { errors, data };
@@ -113,11 +128,11 @@
         // Enviar os dados ao backend
         document.getElementById("submit-form").addEventListener("click", async () => {
             const { errors, data } = validateForm();
-        
+
             const feedback = document.getElementById("feedback");
             feedback.innerHTML = "";
             feedback.className = "";
-        
+
             if (errors.length > 0) {
                 feedback.className = "alert alert-danger";
                 errors.forEach(error => {
@@ -127,15 +142,15 @@
                 });
                 return;
             }
-        
+
             try {
                 // Enviar os dados para o backend
                 const response = await fetch(`${apiUrl}/data`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(data) // Enviar os dados como JSON
+                    body: JSON.stringify(data)
                 });
-        
+
                 const result = await response.json();
                 if (response.ok) {
                     feedback.className = "alert alert-success";
@@ -146,10 +161,9 @@
                 }
             } catch (error) {
                 feedback.className = "alert alert-danger";
-                feedback.textContent = `Erro de conexão: ${error.message}`;
+                feedback.textContent = `Erro ao enviar os dados: ${error.message}`;
             }
         });
-        
 
         // Carregar colunas e gerar formulário
         fetchColumns();
