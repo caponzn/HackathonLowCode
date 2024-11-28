@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+import csv
+from flask import Flask, config, request, jsonify
 from flask_cors import CORS
 import os
 import pandas as pd
@@ -191,50 +192,104 @@ def delete_form_data(data_id):
         print(f"Erro ao excluir dados: {str(e)}")
         return jsonify({"error": f"Erro ao excluir dados: {str(e)}"}), 500
 
-# Rota para upload de arquivos CSV
-@app.route("/api/upload-csv", methods=["POST"])
+
+# Rota para upload e validação de arquivos CSV
+@app.route('/api/upload-csv', methods=['POST'])
 def upload_csv():
-    if "file" not in request.files:
-        return jsonify({"error": "Nenhum arquivo enviado"}), 400
+    if 'file' not in request.files:
+        return jsonify({"error": "Nenhum arquivo foi enviado"}), 400
 
-    file = request.files["file"]
-    if file.filename == "":
-        return jsonify({"error": "Nenhum arquivo selecionado"}), 400
-
-    if not file.filename.endswith(".csv"):
-        return jsonify({"error": "Apenas arquivos .csv são suportados"}), 400
-
-    # Salvar o arquivo CSV no diretório de uploads
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(file_path)
-
-    # Validar o arquivo CSV
-    is_valid, message = validate_csv(file_path)
-    if not is_valid:
-        os.remove(file_path)  # Remover o arquivo inválido
-        return jsonify({"error": message}), 400
+    file = request.files['file']
+    if not file.filename.endswith('.csv'):
+        return jsonify({"error": "Formato de arquivo inválido. Apenas arquivos CSV são permitidos."}), 400
 
     try:
-        # Processar o arquivo CSV (após validação bem-sucedida)
-        data = pd.read_csv(file_path, encoding="utf-8")
+        # Carregar a configuração das colunas
+        config = load_json("form_config.json", {"fields": []})
+        fields = config.get("fields", [])
+        
+        # Processar o arquivo CSV
+        csv_data = file.read().decode('utf8-').splitlines()
+        reader = csv.DictReader(csv_data)
 
-        # Substituir NaN por None para compatibilidade com JSON
-        data = data.replace({np.nan: None})
-        data_records = data.to_dict(orient="records")
+        errors = []
+        processed_data = []
 
-        # Salvar cada linha no banco de dados
+        for i, row in enumerate(reader):
+            row_errors = []
+
+            # Validar cada campo com base nos requisitos
+            for field in fields:
+                field_name = field['name']
+                field_type = field['type']
+                field_required = field.get('required', False)
+                field_min = field.get('min', None)
+                field_max = field.get('max', None)
+                maxLength = int(field.get('maxLength', None))
+
+                value = row.get(field_name)
+
+                # Validar campo obrigatório
+                if field_required and not value:
+                    row_errors.append(f"Campo '{field_name}' é obrigatório.")
+
+                # Validar tipo do campo
+                if field_type == 'INT':
+                    try:
+                        value = int(value)
+                        if field_min is not None and value < field_min:
+                            row_errors.append(f"Campo '{field_name}' deve ser >= {field_min}.")
+                        if field_max is not None and value > field_max:
+                            row_errors.append(f"Campo '{field_name}' deve ser <= {field_max}.")
+                    except ValueError:
+                        row_errors.append(f"Campo '{field_name}' deve ser um número inteiro.")
+                elif field_type == 'FLOAT':
+                    try:
+                        value = float(value)
+                        if field_min is not None and value < field_min:
+                            row_errors.append(f"Campo '{field_name}' deve ser >= {field_min}.")
+                        if field_max is not None and value > field_max:
+                            row_errors.append(f"Campo '{field_name}' deve ser <= {field_max}.")
+                    except ValueError:
+                        row_errors.append(f"Campo '{field_name}' deve ser um número decimal.")
+                elif field_type == 'BOOLEAN':
+                    if value not in ['true', 'false']:
+                        row_errors.append(f"Campo '{field_name}' deve ser 'true' ou 'false'.")
+                # Validar tamanho dos campos (min e max)
+                if value:
+                    # Verificar o tamanho máximo
+                    if maxLength is not None and len(value) > maxLength:
+                        row_errors.append(f"Campo '{field_name}' deve ter no máximo {maxLength} caracteres.")
+
+            if row_errors:
+                errors.append({"line": i + 1, "errors": row_errors})
+            else:
+                processed_data.append(row)
+
+        if errors:
+            return jsonify({
+                "error": "O arquivo contém dados inválidos.",
+                "details": errors
+            }), 400
+            
+        # Inserir dados no banco de dados
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
-            for record in data_records:
-                cursor.execute("INSERT INTO form_responses (data) VALUES (?)", [json.dumps(record)])
+            for data in processed_data:
+                # Substituir valores vazios por None antes de salvar no banco
+                data = {key: (value if value != "" else None) for key, value in data.items()}
+                cursor.execute("INSERT INTO form_responses (data) VALUES (?)", [json.dumps(data)])
             conn.commit()
 
-        os.remove(file_path)  # Remover o arquivo após o processamento
-        return jsonify({"message": "Arquivo CSV carregado com sucesso!", "data": data_records})
+
+        # Caso os dados sejam válidos
+        return jsonify({
+            "message": "Arquivo processado com sucesso.",
+            "data": processed_data
+        }), 200
+
     except Exception as e:
-        os.remove(file_path)  # Remover o arquivo em caso de erro
-        print(f"Erro ao processar o arquivo CSV: {str(e)}")
-        return jsonify({"error": f"Erro ao processar o arquivo: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 # Inicializa o banco de dados ao iniciar o app
 if __name__ == "__main__":
