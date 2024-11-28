@@ -1,5 +1,5 @@
 import csv
-from flask import Flask, config, request, jsonify
+from flask import Flask, Response, request, jsonify
 from flask_cors import CORS
 import os
 import pandas as pd
@@ -290,6 +290,44 @@ def upload_csv():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Rota para gerar o arquivo CSV com os dados salvos no banco de dados
+@app.route("/api/export-csv", methods=["GET"])
+def export_csv():
+    try:
+        # Conectar ao banco de dados e obter os dados
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM form_responses")
+            rows = cursor.fetchall()
+
+            # Se não houver dados, retorne um erro
+            if not rows:
+                return jsonify({"error": "Não há dados no banco de dados para exportar."}), 400
+
+            # Extrair os nomes das colunas do banco
+            columns = ["id", "data"]
+            # Iniciar o arquivo CSV
+            output = []
+            output.append(columns)  # Cabeçalho
+
+            for row in rows:
+                data = json.loads(row[1])  # Carregar os dados JSON
+                data_row = [row[0], data]  # Combinar ID e dados em uma única linha
+                output.append(data_row)
+
+            # Gerar o arquivo CSV
+            def generate():
+                writer = csv.writer(output)
+                for row in output:
+                    yield row
+
+            return Response(generate(), 
+                            mimetype="text/csv", 
+                            headers={"Content-Disposition": "attachment;filename=form_data.csv"})
+    except Exception as e:
+        print(f"Erro ao exportar dados para CSV: {str(e)}")
+        return jsonify({"error": f"Erro ao exportar dados: {str(e)}"}), 500
 
 # Inicializa o banco de dados ao iniciar o app
 if __name__ == "__main__":

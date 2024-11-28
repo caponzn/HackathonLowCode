@@ -4,7 +4,7 @@
             "name": "Nome",
             "type": "VARCHAR",
             "required": true,
-            "maxLength": "10",
+            "maxLength": "15",
             "min": null,
             "max": null
         }
