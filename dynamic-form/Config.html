@@ -330,35 +330,26 @@
             updateColumnsTable();
         }
     }
-    $(document).ready(function() {
-        // Função assíncrona para baixar o CSV
-        $('#downloadCsvBtn').click(async function() {
-            if (confirm("Deseja baixar os dados?")) {
-                try {
-                    // Realiza a requisição assíncrona para baixar o CSV
-                    const response = await fetch('/api/export-csv', {
-                        method: "GET",
-                    });
-
-                    // Verifica se a resposta foi bem-sucedida
-                    if (!response.ok) {
-                        throw new Error(`Erro ao baixar os dados: ${response.statusText}`);
-                    }
-
-                    // Cria um link temporário para fazer o download do arquivo
-                    const blob = await response.blob();
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = 'form_data.csv'; // Nome do arquivo
-                    link.click(); // Dispara o download
-
-                    alert("Arquivo CSV baixado com sucesso!");
-                } catch (error) {
-                    console.error("Erro ao baixar os dados:", error);
-                    alert("Erro ao tentar baixar os dados.");
-                }
+    // Função assíncrona para baixar o CSV
+    document.getElementById('downloadCsvBtn').addEventListener('click', async function() {
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/export-csv');
+            
+            // Verificar se a resposta foi bem-sucedida
+            if (!response.ok) {
+                throw new Error(`Erro ao baixar os dados: ${response.statusText}`);
             }
-        });
+
+            // Baixar o arquivo CSV
+            const blob = await response.blob();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'form_data.csv';  // Nome do arquivo a ser baixado
+            link.click();  // Acionar o clique para fazer o download
+        } catch (error) {
+            alert('Erro ao baixar os dados: ' + error.message);
+            console.error('Erro ao baixar os dados:', error);
+        }
     });
 
     // Certifique-se de que todas as funções estejam no escopo global

@@ -1,5 +1,6 @@
 import csv
-from flask import Flask, Response, request, jsonify
+import tempfile
+from flask import Flask, after_this_request, request, jsonify, send_file
 from flask_cors import CORS
 import os
 import pandas as pd
@@ -292,42 +293,72 @@ def upload_csv():
         return jsonify({"error": str(e)}), 500
 
 # Rota para gerar o arquivo CSV com os dados salvos no banco de dados
-@app.route("/api/export-csv", methods=["GET"])
+@app.route('/api/export-csv', methods=['GET'])
 def export_csv():
     try:
-        # Conectar ao banco de dados e obter os dados
+        # Carregar a configuração das colunas do arquivo JSON
+        config = load_json(CONFIG_FILE, {"fields": []})
+        fields = config.get("fields", [])
+
+        # Conectar ao banco de dados e buscar os dados
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM form_responses")
             rows = cursor.fetchall()
 
-            # Se não houver dados, retorne um erro
-            if not rows:
-                return jsonify({"error": "Não há dados no banco de dados para exportar."}), 400
+        if not rows:
+            raise ValueError("Não há dados no banco para exportar")
 
-            # Extrair os nomes das colunas do banco
-            columns = ["id", "data"]
-            # Iniciar o arquivo CSV
-            output = []
-            output.append(columns)  # Cabeçalho
+        # Criar um arquivo CSV temporário
+        temp_file = tempfile.NamedTemporaryFile(delete=False, mode='w', newline='', encoding='utf-8')
+        with temp_file as csvfile:
+            writer = csv.writer(csvfile)
 
+            # Escrever o cabeçalho (campos) no CSV
+            headers = [field['name'] for field in fields]
+            writer.writerow(headers)
+
+            # Escrever as respostas do formulário
             for row in rows:
-                data = json.loads(row[1])  # Carregar os dados JSON
-                data_row = [row[0], data]  # Combinar ID e dados em uma única linha
-                output.append(data_row)
+                # O conteúdo da coluna 'data' é um JSON, então vamos decodificar e formatar
+                data = json.loads(row[1])  # A segunda coluna (index 1) contém o JSON com os dados
+                formatted_row = []
 
-            # Gerar o arquivo CSV
-            def generate():
-                writer = csv.writer(output)
-                for row in output:
-                    yield row
+                # Para cada campo no arquivo de configuração, formate os dados conforme necessário
+                for field in fields:
+                    column_name = field['name']
+                    column_type = field.get('type', 'VARCHAR')
+                    value = data.get(column_name, "")
 
-            return Response(generate(), 
-                            mimetype="text/csv", 
-                            headers={"Content-Disposition": "attachment;filename=form_data.csv"})
+                    # Verificar e formatar conforme o tipo de dado
+                    if column_type == 'INT':
+                        value = int(value) if value else 0
+                    elif column_type == 'FLOAT':
+                        value = float(value) if value else 0.0
+                    elif column_type == 'BOOLEAN':
+                        value = str(value).lower() in ['true', '1', 'yes']
+                    elif column_type == 'DATE':
+                        value = value if value else '0000-00-00'  # Formato de data como padrão
+
+                    formatted_row.append(value)
+
+                # Escrever a linha formatada no CSV
+                writer.writerow(formatted_row)
+                # Usar o caminho temporário do arquivo para enviá-lo
+        @after_this_request
+        def remove_file(response):
+            # Remover o arquivo temporário após a resposta ser enviada
+            try:
+                os.remove(temp_file.name)
+            except Exception as e:
+                print(f"Erro ao remover o arquivo temporário: {str(e)}")
+            return response
+        
+        return send_file(temp_file.name, as_attachment=True, download_name="form_data.csv", mimetype="text/csv")
+        remove_file()
     except Exception as e:
-        print(f"Erro ao exportar dados para CSV: {str(e)}")
-        return jsonify({"error": f"Erro ao exportar dados: {str(e)}"}), 500
+        print(f"Erro ao exportar CSV: {str(e)}")  # Imprimir erro no console do servidor
+        return jsonify({"error": f"Erro ao exportar os dados: {str(e)}"}), 500
 
 # Inicializa o banco de dados ao iniciar o app
 if __name__ == "__main__":
