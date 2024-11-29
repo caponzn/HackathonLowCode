@@ -213,8 +213,8 @@ def upload_csv():
         csv_data = file.read().decode('utf8-').splitlines()
         reader = csv.DictReader(csv_data)
 
-        errors = []
-        processed_data = []
+        skipped_data = []  # Linhas ignoradas
+        processed_data = []  # Linhas válidas
 
         for i, row in enumerate(reader):
             row_errors = []
@@ -226,7 +226,7 @@ def upload_csv():
                 field_required = field.get('required', False)
                 field_min = field.get('min', None)
                 field_max = field.get('max', None)
-                maxLength = int(field.get('maxLength', None))
+                maxLength = int(field.get('maxLength', None)) if field.get('maxLength') else None
 
                 value = row.get(field_name)
 
@@ -263,17 +263,11 @@ def upload_csv():
                         row_errors.append(f"Campo '{field_name}' deve ter no máximo {maxLength} caracteres.")
 
             if row_errors:
-                errors.append({"line": i + 1, "errors": row_errors})
+                skipped_data.append({"line": i + 1, "data": row, "errors": row_errors})
             else:
                 processed_data.append(row)
 
-        if errors:
-            return jsonify({
-                "error": "O arquivo contém dados inválidos.",
-                "details": errors
-            }), 400
-            
-        # Inserir dados no banco de dados
+        # Inserir dados válidos no banco de dados
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             for data in processed_data:
@@ -281,15 +275,19 @@ def upload_csv():
                 data = {key: (value if value != "" else None) for key, value in data.items()}
                 cursor.execute("INSERT INTO form_responses (data) VALUES (?)", [json.dumps(data)])
             conn.commit()
-
-
-        # Caso os dados sejam válidos
+        print(skipped_data)
+        # Notificar sobre os dados ignorados
         return jsonify({
             "message": "Arquivo processado com sucesso.",
-            "data": processed_data
+            "processed_data": processed_data,
+            "skipped_data": skipped_data
         }), 200
+        
+        
 
     except Exception as e:
+        return jsonify({"error": "Erro ao processar o arquivo.", "details": str(e)}), 500
+
         return jsonify({"error": str(e)}), 500
 
 # Rota para gerar o arquivo CSV com os dados salvos no banco de dados
