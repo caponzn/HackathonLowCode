@@ -1,12 +1,4 @@
 {
     "fields": [
-        {
-            "name": "Nome",
-            "type": "VARCHAR",
-            "required": true,
-            "maxLength": "10",
-            "min": null,
-            "max": null
-        }
     ]
 }
