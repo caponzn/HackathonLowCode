@@ -206,12 +206,13 @@
 
                     const result = await response.json();
                     alert("Arquivo CSV enviado com sucesso!");
+                    
                     console.log(result);
                 } catch (error) {
                     alert(`Erro ao enviar o arquivo CSV: ${error.message}`);
                 }
             });
-
+            
             // Inicializar
             fetchColumns();
         });

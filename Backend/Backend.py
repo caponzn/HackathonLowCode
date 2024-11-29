@@ -1,5 +1,6 @@
 import csv
-from flask import Flask, config, request, jsonify
+import tempfile
+from flask import Flask, after_this_request, request, jsonify, send_file
 from flask_cors import CORS
 import os
 import pandas as pd
@@ -212,8 +213,8 @@ def upload_csv():
         csv_data = file.read().decode('utf8-').splitlines()
         reader = csv.DictReader(csv_data)
 
-        errors = []
-        processed_data = []
+        skipped_data = []  # Linhas ignoradas
+        processed_data = []  # Linhas válidas
 
         for i, row in enumerate(reader):
             row_errors = []
@@ -225,7 +226,7 @@ def upload_csv():
                 field_required = field.get('required', False)
                 field_min = field.get('min', None)
                 field_max = field.get('max', None)
-                maxLength = int(field.get('maxLength', None))
+                maxLength = int(field.get('maxLength', None)) if field.get('maxLength') else None
 
                 value = row.get(field_name)
 
@@ -262,17 +263,11 @@ def upload_csv():
                         row_errors.append(f"Campo '{field_name}' deve ter no máximo {maxLength} caracteres.")
 
             if row_errors:
-                errors.append({"line": i + 1, "errors": row_errors})
+                skipped_data.append({"line": i + 1, "data": row, "errors": row_errors})
             else:
                 processed_data.append(row)
 
-        if errors:
-            return jsonify({
-                "error": "O arquivo contém dados inválidos.",
-                "details": errors
-            }), 400
-            
-        # Inserir dados no banco de dados
+        # Inserir dados válidos no banco de dados
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             for data in processed_data:
@@ -280,16 +275,88 @@ def upload_csv():
                 data = {key: (value if value != "" else None) for key, value in data.items()}
                 cursor.execute("INSERT INTO form_responses (data) VALUES (?)", [json.dumps(data)])
             conn.commit()
-
-
-        # Caso os dados sejam válidos
+        print(skipped_data)
+        # Notificar sobre os dados ignorados
         return jsonify({
             "message": "Arquivo processado com sucesso.",
-            "data": processed_data
+            "processed_data": processed_data,
+            "skipped_data": skipped_data
         }), 200
+        
+        
 
     except Exception as e:
+        return jsonify({"error": "Erro ao processar o arquivo.", "details": str(e)}), 500
+
         return jsonify({"error": str(e)}), 500
+
+# Rota para gerar o arquivo CSV com os dados salvos no banco de dados
+@app.route('/api/export-csv', methods=['GET'])
+def export_csv():
+    try:
+        # Carregar a configuração das colunas do arquivo JSON
+        config = load_json(CONFIG_FILE, {"fields": []})
+        fields = config.get("fields", [])
+
+        # Conectar ao banco de dados e buscar os dados
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM form_responses")
+            rows = cursor.fetchall()
+
+        if not rows:
+            raise ValueError("Não há dados no banco para exportar")
+
+        # Criar um arquivo CSV temporário
+        temp_file = tempfile.NamedTemporaryFile(delete=False, mode='w', newline='', encoding='utf-8')
+        with temp_file as csvfile:
+            writer = csv.writer(csvfile)
+
+            # Escrever o cabeçalho (campos) no CSV
+            headers = [field['name'] for field in fields]
+            writer.writerow(headers)
+
+            # Escrever as respostas do formulário
+            for row in rows:
+                # O conteúdo da coluna 'data' é um JSON, então vamos decodificar e formatar
+                data = json.loads(row[1])  # A segunda coluna (index 1) contém o JSON com os dados
+                formatted_row = []
+
+                # Para cada campo no arquivo de configuração, formate os dados conforme necessário
+                for field in fields:
+                    column_name = field['name']
+                    column_type = field.get('type', 'VARCHAR')
+                    value = data.get(column_name, "")
+
+                    # Verificar e formatar conforme o tipo de dado
+                    if column_type == 'INT':
+                        value = int(value) if value else 0
+                    elif column_type == 'FLOAT':
+                        value = float(value) if value else 0.0
+                    elif column_type == 'BOOLEAN':
+                        value = str(value).lower() in ['true', '1', 'yes']
+                    elif column_type == 'DATE':
+                        value = value if value else '0000-00-00'  # Formato de data como padrão
+
+                    formatted_row.append(value)
+
+                # Escrever a linha formatada no CSV
+                writer.writerow(formatted_row)
+                # Usar o caminho temporário do arquivo para enviá-lo
+        @after_this_request
+        def remove_file(response):
+            # Remover o arquivo temporário após a resposta ser enviada
+            try:
+                os.remove(temp_file.name)
+            except Exception as e:
+                print(f"Erro ao remover o arquivo temporário: {str(e)}")
+            return response
+        
+        return send_file(temp_file.name, as_attachment=True, download_name="form_data.csv", mimetype="text/csv")
+        remove_file()
+    except Exception as e:
+        print(f"Erro ao exportar CSV: {str(e)}")  # Imprimir erro no console do servidor
+        return jsonify({"error": f"Erro ao exportar os dados: {str(e)}"}), 500
 
 # Inicializa o banco de dados ao iniciar o app
 if __name__ == "__main__":

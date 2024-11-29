@@ -6,6 +6,7 @@
     <title>Configuração de Colunas e Dados Enviados</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 
 <body class="bg-light">
@@ -77,9 +78,10 @@
                     </tbody>
                 </table>
                 <button type="button" class="btn btn-success" onclick="saveColumnConfig()">Salvar Configuração</button>
+                <button type="button" class="btn btn-success" id="downloadCsvBtn">Baixar Dados CSV</button>
+
             </div>
         </div>
-
         <!-- Tabela de Dados Enviados -->
         <div class="card mb-4">
             <div class="card-header">Dados Enviados</div>
@@ -324,6 +326,27 @@
             updateColumnsTable();
         }
     }
+    // Função assíncrona para baixar o CSV
+    document.getElementById('downloadCsvBtn').addEventListener('click', async function() {
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/export-csv');
+            
+            // Verificar se a resposta foi bem-sucedida
+            if (!response.ok) {
+                throw new Error(`Erro ao baixar os dados: ${response.statusText}`);
+            }
+
+            // Baixar o arquivo CSV
+            const blob = await response.blob();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'form_data.csv';  // Nome do arquivo a ser baixado
+            link.click();  // Acionar o clique para fazer o download
+        } catch (error) {
+            alert('Erro ao baixar os dados: ' + error.message);
+            console.error('Erro ao baixar os dados:', error);
+        }
+    });
 
     // Certifique-se de que todas as funções estejam no escopo global
     window.addOrEditColumn = addOrEditColumn;
